@@ -88,6 +88,7 @@ proc meteo_api_request {api_key city} {
 }
 
 proc meteo_pubm {nick uhost hand chan text} {
+    puts "[meteo.tcl] pubm: nick=$nick chan=$chan text=$text"
     if {[regexp -nocase {^!meteo(?:\s+(.*))?$} $text -> city]} {
         set city [string trim $city]
         if {$city eq ""} {
@@ -103,11 +104,33 @@ proc meteo_pubm {nick uhost hand chan text} {
     }
 }
 
+proc meteo_pm {nick uhost hand chan text} {
+    puts "[meteo.tcl] pm: nick=$nick text=$text"
+    if {[regexp -nocase {^!meteo(?:\s+(.*))?$} $text -> city]} {
+        set city [string trim $city]
+        if {$city eq ""} {
+            putquick "PRIVMSG $nick :uso: !meteo <città>"
+            return
+        }
+        if {![info exists ::meteo_api_key] || $::meteo_api_key eq ""} {
+            putquick "PRIVMSG $nick :errore: meteo_api_key non impostata (eggdrop.conf o env OWM_API_KEY)."
+            return
+        }
+        set reply [meteo_api_request $::meteo_api_key $city]
+        putquick "PRIVMSG $nick :$reply"
+    }
+}
+
 # Registrazione Eggdrop bind se possibile
 if {[catch {bind pubm meteo meteo_pubm} err]} {
-    puts {[meteo.tcl] Eggdrop bind non disponibile: $err}
+    puts {[meteo.tcl] Eggdrop bind pubm non disponibile: $err}
 } else {
     puts {[meteo.tcl] Comando !meteo registrato su eventi pubm}
+}
+if {[catch {bind pm meteo meteo_pm} err]} {
+    puts {[meteo.tcl] Eggdrop bind pm non disponibile: $err}
+} else {
+    puts {[meteo.tcl] Comando !meteo registrato su eventi pm}
 }
 
 # fallback CLI se invocato direttamente
