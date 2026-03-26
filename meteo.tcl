@@ -91,7 +91,8 @@ proc meteo_api_request {api_key city} {
 
 proc meteo_pubm {nick uhost hand chan text} {
     puts "[meteo.tcl] pubm: nick=$nick chan=$chan text=$text"
-    if {[regexp -nocase {^!meteo(?:\s+(.*))?$} $text -> city]} {
+    if {[regexp -nocase {^[ \t]*!meteo(?:[ \t]+(.*))?$} $text -> city]} {
+        puts "[meteo.tcl] pubm MATCH: city_raw='$city'"
         set city [string trim $city]
         if {$city eq ""} {
             putquick "PRIVMSG $chan :$nick, uso: !meteo <città>"
@@ -103,6 +104,8 @@ proc meteo_pubm {nick uhost hand chan text} {
         }
         set reply [meteo_api_request $::meteo_api_key $city]
         putquick "PRIVMSG $chan :$nick, $reply"
+    } else {
+        puts "[meteo.tcl] pubm NO MATCH: comando diverso o formato non supportato"
     }
 }
 
