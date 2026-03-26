@@ -6,6 +6,8 @@
 #   set meteo_api_key "TUO_API_KEY"
 #   source /path/to/meteo.tcl
 
+puts {[meteo.tcl] Script caricato}
+
 # Imposta in priority la variabile globale usata dal bot
 if {![info exists ::meteo_api_key] || $::meteo_api_key eq ""} {
     set ::meteo_api_key [string trim [::env(OWM_API_KEY)]]
