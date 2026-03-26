@@ -122,12 +122,12 @@ proc meteo_pm {nick uhost hand chan text} {
 }
 
 # Registrazione Eggdrop bind se possibile
-if {[catch {bind pubm meteo meteo_pubm} err]} {
+if {[catch {bind pubm -|- *!*@* meteo_pubm} err]} {
     puts {[meteo.tcl] Eggdrop bind pubm non disponibile: $err}
 } else {
     puts {[meteo.tcl] Comando !meteo registrato su eventi pubm}
 }
-if {[catch {bind pm meteo meteo_pm} err]} {
+if {[catch {bind pm -|- *!*@* meteo_pm} err]} {
     puts {[meteo.tcl] Eggdrop bind pm non disponibile: $err}
 } else {
     puts {[meteo.tcl] Comando !meteo registrato su eventi pm}
