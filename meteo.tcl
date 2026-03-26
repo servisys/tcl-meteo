@@ -105,9 +105,9 @@ proc meteo_pubm {nick uhost hand chan text} {
 
 # Registrazione Eggdrop bind se possibile
 if {[catch {bind pubm meteo meteo_pubm} err]} {
-    puts "[meteo.tcl] Eggdrop bind non disponibile: $err"
+    puts {[meteo.tcl] Eggdrop bind non disponibile: $err}
 } else {
-    puts "[meteo.tcl] Comando !meteo registrato su eventi pubm"
+    puts {[meteo.tcl] Comando !meteo registrato su eventi pubm}
 }
 
 # fallback CLI se invocato direttamente
