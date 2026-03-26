@@ -129,10 +129,10 @@ if {[catch {bind pubm -|- *!*@* meteo_pubm} err]} {
 } else {
     puts {[meteo.tcl] Comando !meteo registrato su eventi pubm}
 }
-if {[catch {bind pm -|- *!*@* meteo_pm} err]} {
-    puts {[meteo.tcl] Eggdrop bind pm non disponibile: $err}
+if {[catch {bind msg -|- *!*@* meteo_pm} err]} {
+    puts {[meteo.tcl] Eggdrop bind msg non disponibile: $err}
 } else {
-    puts {[meteo.tcl] Comando !meteo registrato su eventi pm}
+    puts {[meteo.tcl] Comando !meteo registrato su eventi msg}
 }
 
 # fallback CLI se invocato direttamente
