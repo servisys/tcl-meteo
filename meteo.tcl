@@ -111,7 +111,7 @@ if {[catch {bind pubm meteo meteo_pubm} err]} {
 }
 
 # fallback CLI se invocato direttamente
-if {[llength $argv] > 0} {
+if {[info exists argv] && [llength $argv] > 0} {
     set cmd [lindex $argv 0]
     if {$cmd ne "!meteo"} {
         puts "Comando non riconosciuto. Usa !meteo <città>."
