@@ -1,160 +1,92 @@
-#!/usr/bin/env tclsh
-# Eggdrop: comando !meteo <città>
-# Il bot legge il comando da canale IRC ed esegue request OpenWeatherMap.
-# Usa: !meteo Milano
-# In eggdrop.conf:
+# meteo.tcl - Eggdrop !meteo <città> via OpenWeatherMap
+# Configura in eggdrop.conf:
 #   set meteo_api_key "TUO_API_KEY"
 #   source /path/to/meteo.tcl
 
-puts {[meteo.tcl] Script caricato}
+putlog "\[meteo.tcl\] Script caricato"
 
-# Imposta in priority la variabile globale usata dal bot
+# Fallback: leggi la chiave dalla variabile d'ambiente se non impostata in conf
 if {![info exists ::meteo_api_key] || $::meteo_api_key eq ""} {
-    set ::meteo_api_key [string trim [::env(OWM_API_KEY)]]
+    catch {set ::meteo_api_key $::env(OWM_API_KEY)}
 }
 
 proc url_encode {s} {
     set res ""
     foreach c [split $s ""] {
-        if {[string is alnum -strict $c] || $c eq "." || $c eq "_" || $c eq "~" || $c eq "-"} {
+        if {[string is alnum -strict $c] || $c in {. _ ~ -}} {
             append res $c
         } elseif {$c eq " "} {
             append res +
         } else {
             binary scan $c c code
-            append res [format "%%%02X" $code]
+            append res [format "%%%02X" [expr {$code & 0xff}]]
         }
     }
     return $res
 }
 
-proc meteo_api_request {api_key city} {
+proc meteo_fetch {city} {
+    if {![info exists ::meteo_api_key] || $::meteo_api_key eq ""} {
+        return "Errore: meteo_api_key non impostata nel conf."
+    }
     set city_trim [string trim $city]
     if {$city_trim eq ""} {
         return "Uso: !meteo <città>"
     }
+
     set city_q [url_encode $city_trim]
-    set url "http://api.openweathermap.org/data/2.5/weather?q=$city_q&appid=$api_key&units=metric&lang=it"
+    set url "http://api.openweathermap.org/data/2.5/weather?q=${city_q}&appid=${::meteo_api_key}&units=metric&lang=it"
 
     if {[catch {set resp [exec curl -s -m 10 $url]} err]} {
-        return "Impossibile contattare il servizio meteo (timeout/rete)."
+        return "Impossibile contattare il servizio meteo."
     }
     if {$resp eq ""} {
         return "Risposta vuota dal servizio meteo."
     }
 
-    set weather "?"
-    set temp "?"
-    set feels_like "?"
-    set humidity "?"
-    set wind_speed "?"
-    set cityname $city_trim
-    set country "??"
-    set cod 0
-    set msg ""
-
-    if {[regexp {"cod"\s*:\s*([0-9]+)} $resp -> codval]} {
-        set cod $codval
-    }
-    if {[regexp {"message"\s*:\s*"([^"]+)"} $resp -> msgval]} {
-        set msg $msgval
-    }
-    if {$cod != 200 && $cod != 0} {
-        return "Errore meteo: $msg"
+    # Controlla codice errore API
+    if {[regexp {"cod"\s*:\s*"?(\d+)"?} $resp -> cod] && $cod ne "200"} {
+        regexp {"message"\s*:\s*"([^"]+)"} $resp -> msg
+        return "Errore meteo: [expr {[info exists msg] ? $msg : $cod}]"
     }
 
-    if {[regexp {"weather"\s*:\s*\[\s*\{[^\}]*"description"\s*:\s*"([^"]+)"} $resp -> weather]} {
-        ;# già settato
-    }
-    if {[regexp {"temp"\s*:\s*([0-9.+-]+)} $resp -> temp]} {
-    }
-    if {[regexp {"feels_like"\s*:\s*([0-9.+-]+)} $resp -> feels_like]} {
-    }
-    if {[regexp {"humidity"\s*:\s*([0-9]+)} $resp -> humidity]} {
-    }
-    if {[regexp {"speed"\s*:\s*([0-9.+-]+)} $resp -> wind_speed]} {
-    }
-    if {[regexp {"name"\s*:\s*"([^"]+)"} $resp -> cityname]} {
-    }
-    if {[regexp {"country"\s*:\s*"([^"]+)"} $resp -> country]} {
-    }
+    set weather "n/a"; set temp "n/a"; set feels_like "n/a"
+    set humidity "n/a"; set wind_speed "n/a"
+    set cityname $city_trim; set country "??"
 
-    if {$weather eq ""} {set weather "n/a"}
-    if {$temp eq ""} {set temp "n/a"}
-    if {$feels_like eq ""} {set feels_like "n/a"}
-    if {$humidity eq ""} {set humidity "n/a"}
-    if {$wind_speed eq ""} {set wind_speed "n/a"}
-    if {$cityname eq ""} {set cityname $city_trim}
+    regexp {"description"\s*:\s*"([^"]+)"} $resp -> weather
+    regexp {"temp"\s*:\s*(-?[0-9.]+)} $resp -> temp
+    regexp {"feels_like"\s*:\s*(-?[0-9.]+)} $resp -> feels_like
+    regexp {"humidity"\s*:\s*([0-9]+)} $resp -> humidity
+    regexp {"speed"\s*:\s*([0-9.]+)} $resp -> wind_speed
+    regexp {"name"\s*:\s*"([^"]+)"} $resp -> cityname
+    regexp {"country"\s*:\s*"([^"]+)"} $resp -> country
 
-    return "Meteo $cityname,$country: $weather, temperatura $temp°C (sensazione $feels_like°C), umidità ${humidity}% , vento ${wind_speed} m/s."
+    return "Meteo ${cityname}, ${country}: ${weather} | Temp: ${temp}°C (percepiti ${feels_like}°C) | Umidità: ${humidity}% | Vento: ${wind_speed} m/s"
 }
 
-proc meteo_pubm {nick uhost hand chan text} {
-    puts "[meteo.tcl] pubm: nick=$nick chan=$chan text=$text"
-    if {[regexp -nocase {^[ \t]*!meteo\b(?:[ \t]*(.*))?$} $text -> city]} {
-        puts "[meteo.tcl] pubm MATCH: city_raw='$city'"
-        set city [string trim $city]
-        if {$city eq ""} {
-            putquick "PRIVMSG $chan :$nick, uso: !meteo <città>"
-            return
-        }
-        if {![info exists ::meteo_api_key] || $::meteo_api_key eq ""} {
-            putquick "PRIVMSG $chan :$nick, errore: meteo_api_key non impostata (eggdrop.conf o env OWM_API_KEY)."
-            return
-        }
-        set reply [meteo_api_request $::meteo_api_key $city]
-        putquick "PRIVMSG $chan :$nick, $reply"
-    } else {
-        puts "[meteo.tcl] pubm NO MATCH: comando diverso o formato non supportato"
-        putquick "PRIVMSG $chan :$nick, comando non riconosciuto. Usa !meteo <città>"
-    }
-}
-
-proc meteo_pm {nick uhost hand chan text} {
-    puts "[meteo.tcl] pm: nick=$nick text=$text"
-    if {[regexp -nocase {^!meteo(?:\s+(.*))?$} $text -> city]} {
-        set city [string trim $city]
-        if {$city eq ""} {
-            putquick "PRIVMSG $nick :uso: !meteo <città>"
-            return
-        }
-        if {![info exists ::meteo_api_key] || $::meteo_api_key eq ""} {
-            putquick "PRIVMSG $nick :errore: meteo_api_key non impostata (eggdrop.conf o env OWM_API_KEY)."
-            return
-        }
-        set reply [meteo_api_request $::meteo_api_key $city]
-        putquick "PRIVMSG $nick :$reply"
-    }
-}
-
-# Registrazione Eggdrop bind se possibile
-if {[catch {bind pubm -|- *!*@* meteo_pubm} err]} {
-    puts {[meteo.tcl] Eggdrop bind pubm non disponibile: $err}
-} else {
-    puts {[meteo.tcl] Comando !meteo registrato su eventi pubm}
-}
-if {[catch {bind msg -|- *!*@* meteo_pm} err]} {
-    puts {[meteo.tcl] Eggdrop bind msg non disponibile: $err}
-} else {
-    puts {[meteo.tcl] Comando !meteo registrato su eventi msg}
-}
-
-# fallback CLI se invocato direttamente
-if {[info exists argv] && [llength $argv] > 0} {
-    set cmd [lindex $argv 0]
-    if {$cmd ne "!meteo"} {
-        puts "Comando non riconosciuto. Usa !meteo <città>."
-        exit 0
-    }
-    set city [join [lrange $argv 1 end] " "]
+# Risponde al comando !meteo in canale
+proc meteo_pub {nick uhost hand chan text} {
+    set city [string trim $text]
     if {$city eq ""} {
-        puts "Uso: !meteo <città>"
-        exit 0
+        putquick "PRIVMSG $chan :$nick: uso: !meteo <città>"
+        return
     }
-    if {![info exists ::meteo_api_key] || $::meteo_api_key eq ""} {
-        puts "Errore: meteo_api_key non impostata.";
-        exit 1
-    }
-    puts [meteo_api_request $::meteo_api_key $city]
-    exit 0
+    putquick "PRIVMSG $chan :[meteo_fetch $city]"
 }
+
+# Risponde al comando !meteo in privato
+proc meteo_msg {nick uhost hand text} {
+    set city [string trim $text]
+    if {$city eq ""} {
+        putquick "PRIVMSG $nick :Uso: !meteo <città>"
+        return
+    }
+    putquick "PRIVMSG $nick :[meteo_fetch $city]"
+}
+
+# Registrazione bind - pub vuole la maschera del comando
+bind pub -|- !meteo meteo_pub
+bind msg -|- !meteo meteo_msg
+
+putlog "\[meteo.tcl\] Bind !meteo registrato (pub + msg)"
